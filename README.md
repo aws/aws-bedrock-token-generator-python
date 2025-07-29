@@ -7,16 +7,6 @@
 
 The **AWS Bedrock Token Generator for Python** is a lightweight utility library that generates short-term bearer tokens for AWS Bedrock API authentication. This library simplifies the process of creating secure, time-limited tokens that can be used to authenticate with AWS Bedrock services without exposing long-term credentials.
 
-## Features
-
-- ✅ **Simple API**: Single method to generate bearer tokens
-- ✅ **Secure**: Uses AWS SigV4 signing with 12-hour token expiration
-- ✅ **Multi-region support**: Works with any AWS region where Bedrock is available
-- ✅ **Boto3 Integration**: Seamlessly works with boto3 credential providers
-- ✅ **Lightweight**: Minimal dependencies, focused functionality
-- ✅ **Well-tested**: Comprehensive unit tests with multiple scenarios
-- ✅ **Type hints**: Full type annotation support for better IDE experience
-
 ## Installation
 
 ### Using pip
@@ -37,51 +27,46 @@ pip install -e .
 
 ### Basic Usage
 
+##### Create token with no parameters, uses default region, credentials and token expiry time (1 hour) #####
+
 ```python
-from aws_bedrock_token_generator import BedrockTokenGenerator
-import boto3
+from aws_bedrock_token_generator import provide_token
 
-# Create token generator
-token_generator = BedrockTokenGenerator()
-
-# Generate token using default credentials
-session = boto3.Session()
-credentials = session.get_credentials()
-
-bearer_token = token_generator.get_token(credentials, "us-west-2")
-
-# Use the token for API calls (valid for 12 hours)
-print(f"Bearer Token: {bearer_token}")
+token = provide_token()  # uses AWS_REGION env var and default credential chain
+print(f"Token: {token}")
 ```
 
-## API Reference
-
-### BedrockTokenGenerator
-
-#### `get_token(credentials, region)`
-
-Generates a bearer token for AWS Bedrock API authentication.
-
-**Parameters:**
-- `credentials` (botocore.credentials.Credentials): AWS credentials to use for signing
-- `region` (str): AWS region identifier (e.g., "us-west-2")
-
-**Returns:**
-- `str`: A bearer token valid for 12 hours, prefixed with "bedrock-api-key-"
-
-**Raises:**
-- `ValueError`: If credentials or region are invalid
-- `ClientError`: If AWS service call fails
-
-**Example:**
+##### Create token using EnvProvider credentials provider #####
 ```python
-from aws_bedrock_token_generator import BedrockTokenGenerator
-import boto3
+from aws_bedrock_token_generator import provide_token
+from botocore.credentials import EnvProvider
 
-generator = BedrockTokenGenerator()
-session = boto3.Session()
-credentials = session.get_credentials()
-token = generator.get_token(credentials, "us-west-2")
+token = provide_token(region="us-east-1", aws_credentials_provider=EnvProvider())
+print(f"Token: {token}")
+```
+
+##### Create token with AssumeRole credentials provider #####
+```python
+from aws_bedrock_token_generator import provide_token
+from botocore.credentials import AssumeRoleProvider, CanonicalNameCredentialSourcer, EnvProvider
+from botocore.session import Session
+from datetime import timedelta
+
+session = Session()
+assume_role_provider = AssumeRoleProvider(
+  profile_name="bearertoken",
+  load_config=lambda: session.full_config,
+  client_creator=session.create_client,
+  credential_sourcer=CanonicalNameCredentialSourcer([EnvProvider()]),
+  cache={}
+)
+
+bearer_token = provide_token(
+  region="us-east-1",
+  aws_credentials_provider=assume_role_provider,
+  expiry=timedelta(seconds=900)
+)
+print(f"Bearer Token: {bearer_token}")
 ```
 
 ## Token Format
@@ -94,11 +79,14 @@ bedrock-api-key-<base64-encoded-presigned-url>&Version=1
 - **Prefix**: `bedrock-api-key-` identifies the token type
 - **Payload**: Base64-encoded presigned URL with embedded credentials
 - **Version**: `&Version=1` for future compatibility
-- **Expiration**: 12 hours from generation time
+- **Expiration**: The token has a default expiration of 12 hours. If the expires parameter is specified during token creation, the expiration can be configured up to a maximum of 12 hours. However, the actual token validity period will always
+  be the minimum of the requested expiration time and the AWS credentials' expiry time
 
 ## Security Considerations
 
-- **Token Expiration**: Tokens are valid for 12 hours and cannot be renewed
+- **Token Expiration**: The token has a default expiration of 12 hours. If the expiry parameter is specified during token creation, the expiration can be configured up to a maximum of 12 hours. However, the actual token validity period will always
+  be the minimum of the requested expiration time and the AWS credentials' expiry time. The token must be generated again once it expires,
+  as it cannot be refreshed or extended
 - **Secure Storage**: Store tokens securely and avoid logging them
 - **Credential Management**: Use IAM roles and temporary credentials when possible
 - **Network Security**: Always use HTTPS when transmitting tokens
@@ -109,59 +97,6 @@ bedrock-api-key-<base64-encoded-presigned-url>&Version=1
 - **Python**: 3.7 or later
 - **boto3**: 1.26.0 or later
 - **botocore**: 1.29.0 or later
-
-## Examples
-
-### Complete Example with Error Handling
-
-```python
-from aws_bedrock_token_generator import BedrockTokenGenerator
-import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
-
-def generate_bedrock_token():
-    try:
-        token_generator = BedrockTokenGenerator()
-        
-        # Get credentials from default credential chain
-        session = boto3.Session()
-        credentials = session.get_credentials()
-        
-        if not credentials:
-            raise NoCredentialsError()
-        
-        token = token_generator.get_token(credentials, "us-west-2")
-        
-        print(f"Successfully generated token: {token[:30]}...")
-        return token
-        
-    except NoCredentialsError:
-        print("Error: No AWS credentials found")
-    except ClientError as e:
-        print(f"AWS service error: {e}")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-
-if __name__ == "__main__":
-    generate_bedrock_token()
-```
-
-### Integration with AWS Bedrock Client
-
-```python
-import boto3
-from aws_bedrock_token_generator import BedrockTokenGenerator
-
-# Generate token
-token_generator = BedrockTokenGenerator()
-session = boto3.Session()
-credentials = session.get_credentials()
-bearer_token = token_generator.get_token(credentials, "us-west-2")
-
-# Use with Bedrock client (conceptual - actual implementation may vary)
-bedrock_client = boto3.client('bedrock', region_name='us-west-2')
-# Note: Token usage with Bedrock client depends on specific API requirements
-```
 
 ## Development
 
