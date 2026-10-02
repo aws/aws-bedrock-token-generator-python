@@ -69,6 +69,35 @@ bearer_token = provide_token(
 print(f"Bearer Token: {bearer_token}")
 ```
 
+##### Create token with an explicit AWS Profile #####
+
+You can use credentials from an explicit AWS Profile (e.g. configured in `~/.aws/config` or `~/.aws/credentials`, including SSO, AssumeRole, and IAM user credentials) by obtaining credentials from a `botocore.session.Session` and passing them to `BedrockTokenGenerator`:
+
+```python
+from aws_bedrock_token_generator import BedrockTokenGenerator
+from botocore.session import Session
+
+# Load credentials for a specific AWS profile
+session = Session(profile="my-profile")
+credentials = session.get_credentials()
+
+# Generate token using explicit credentials and region
+generator = BedrockTokenGenerator()
+token = generator.get_token(credentials=credentials, region="us-east-1")
+print(f"Token: {token}")
+```
+
+Alternatively, you can set the `AWS_PROFILE` environment variable before calling `provide_token()`:
+
+```python
+import os
+from aws_bedrock_token_generator import provide_token
+
+os.environ["AWS_PROFILE"] = "my-profile"
+token = provide_token(region="us-east-1")
+print(f"Token: {token}")
+```
+
 ## Token Format
 
 The generated tokens follow this format:
